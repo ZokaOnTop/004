@@ -1,0 +1,748 @@
+--[[ 
+    ZOKA HUB - MULTI-TOOL OS (v2.3 ULTRA-SIGHT)
+    MODIF: ADDED CFLY (INVIS-FLY) SYSTEM
+]]
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local player = Players.LocalPlayer
+local ALT_TOGGLE = Enum.KeyCode.KeypadSeven
+local ESP_KEY = Enum.KeyCode.P 
+local FLY_KEY = Enum.KeyCode.F 
+local CFLY_KEY = Enum.KeyCode.K -- Touche par défaut pour le CFrame Fly
+local startTime = os.time()
+
+local SOUNDS = {
+    IntroAmbience = "rbxassetid://90305812327722", 
+    Static = "rbxassetid://140043289814504", 
+    Toggle = "rbxassetid://80099403859001",
+    FlySound = "rbxassetid://75847935370848", 
+}
+
+if CoreGui:FindFirstChild("ZokaHub") then CoreGui.ZokaHub:Destroy() end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ZokaHub"
+screenGui.Parent = CoreGui
+screenGui.IgnoreGuiInset = true 
+
+-----------------------------------------------------------
+-- SYSTEME DE DRAG
+-----------------------------------------------------------
+local function makeDraggable(gui)
+    local dragging, dragInput, dragStart, startPos
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = gui.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    gui.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
+    end)
+    RunService.RenderStepped:Connect(function()
+        if dragging and dragInput then
+            local delta = dragInput.Position - dragStart
+            gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-----------------------------------------------------------
+-- UTILS & GLITCH
+-----------------------------------------------------------
+local function playSound(id, vol, pitch)
+    local s = Instance.new("Sound")
+    s.SoundId = id
+    s.Volume = vol or 0.5
+    s.PlaybackSpeed = pitch or 1
+    s.Parent = screenGui
+    s:Play()
+    s.Ended:Connect(function() s:Destroy() end)
+end
+
+local function applyHackerStyle(obj, strokeColor, transparency)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = obj
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = strokeColor or Color3.fromRGB(0, 255, 100)
+    stroke.Thickness = 1.2
+    stroke.Transparency = transparency or 0.5
+    stroke.Parent = obj
+    return stroke
+end
+
+local function fullScreenGlitch()
+    local line = Instance.new("Frame", screenGui)
+    line.Size = UDim2.new(1, 0, 0, math.random(2, 15))
+    line.Position = UDim2.new(0, 0, math.random(), 0)
+    line.BackgroundColor3 = (math.random() > 0.5 and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 0, 80))
+    line.BorderSizePixel = 0
+    line.ZIndex = 10000
+    task.delay(0.04, function() line:Destroy() end)
+end
+
+-----------------------------------------------------------
+-- ESP SYSTEM ENGINE
+-----------------------------------------------------------
+local espEnabled = false
+local showDistance = false
+local showHealth = false
+local espObjects = {}
+local espColor = Color3.fromRGB(255, 255, 255)
+local espTextSize = 10 
+local colorIndex = 1
+local colors = {
+    Color3.fromRGB(0, 255, 100), -- Vert
+    Color3.fromRGB(255, 0, 80),  -- Rouge
+    Color3.fromRGB(0, 150, 255), -- Bleu
+    Color3.fromRGB(255, 200, 0), -- Jaune
+    Color3.fromRGB(255, 255, 255) -- Blanc
+}
+
+local function createESP(targetPlayer)
+    if targetPlayer == player then return end
+    local folder = Instance.new("Folder", screenGui)
+    folder.Name = "ESP_" .. targetPlayer.Name
+    
+    local function updateESP()
+        local char = targetPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and espEnabled then
+            local hrp = char.HumanoidRootPart
+            local hum = char.Humanoid
+            local head = char:FindFirstChild("Head")
+            local cam = workspace.CurrentCamera
+            local pos, onScreen = cam:WorldToViewportPoint(hrp.Position)
+            
+            local bodyHighlight = char:FindFirstChild("ZokaBodyHighlight") or Instance.new("Highlight")
+            bodyHighlight.Name = "ZokaBodyHighlight"
+            bodyHighlight.Parent = char
+            bodyHighlight.FillColor = Color3.fromRGB(0, 255, 100)
+            bodyHighlight.Enabled = true
+            
+            if head then
+                local headHighlight = head:FindFirstChild("ZokaHeadHighlight") or Instance.new("Highlight")
+                headHighlight.Name = "ZokaHeadHighlight"
+                headHighlight.Parent = head
+                headHighlight.Adornee = head
+                headHighlight.FillColor = Color3.fromRGB(255, 0, 0)
+                headHighlight.Enabled = true
+                
+                for _, acc in pairs(char:GetChildren()) do
+                    if acc:IsA("Accessory") and acc:FindFirstChild("Handle") then
+                        local accHighlight = acc.Handle:FindFirstChild("ZokaHairHighlight") or Instance.new("Highlight")
+                        accHighlight.Name = "ZokaHairHighlight"
+                        accHighlight.Parent = acc.Handle
+                        accHighlight.Adornee = acc.Handle
+                        accHighlight.FillColor = Color3.fromRGB(255, 0, 0)
+                        accHighlight.Enabled = true
+                    end
+                end
+            end
+
+            local nameLabel = folder:FindFirstChild("Name") or Instance.new("TextLabel", folder)
+            if onScreen then
+                nameLabel.Name = "Name"
+                nameLabel.Visible = true
+                nameLabel.Position = UDim2.new(0, pos.X, 0, pos.Y - 60)
+                nameLabel.Size = UDim2.new(0, 200, 0, 40)
+                nameLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+                nameLabel.BackgroundTransparency = 1
+                
+                local displayText = targetPlayer.Name
+                if showHealth then
+                    displayText = displayText .. "\nHP: " .. math.floor(hum.Health)
+                end
+                if showDistance then
+                    local dist = math.floor((player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
+                    displayText = displayText .. "\n[" .. dist .. "m]"
+                end
+                
+                nameLabel.Text = displayText
+                nameLabel.TextColor3 = espColor
+                nameLabel.Font = Enum.Font.RobotoMono
+                nameLabel.TextSize = espTextSize
+                if not nameLabel:FindFirstChild("Outline") then
+                    Instance.new("UIStroke", nameLabel).Thickness = 2
+                end
+            else
+                nameLabel.Visible = false
+            end
+        else
+            folder:ClearAllChildren()
+            if targetPlayer.Character then
+                if targetPlayer.Character:FindFirstChild("ZokaBodyHighlight") then targetPlayer.Character.ZokaBodyHighlight.Enabled = false end
+                if targetPlayer.Character:FindFirstChild("Head") and targetPlayer.Character.Head:FindFirstChild("ZokaHeadHighlight") then targetPlayer.Character.Head.ZokaHeadHighlight.Enabled = false end
+                for _, v in pairs(targetPlayer.Character:GetDescendants()) do
+                    if v.Name == "ZokaHairHighlight" then v.Enabled = false end
+                end
+            end
+        end
+    end
+    local conn = RunService.RenderStepped:Connect(updateESP)
+    espObjects[targetPlayer] = {Folder = folder, Conn = conn}
+end
+
+local function toggleESP()
+    espEnabled = not espEnabled
+    playSound(SOUNDS.Static, 0.4)
+    fullScreenGlitch()
+    if not espEnabled then
+        for p, data in pairs(espObjects) do data.Folder:ClearAllChildren() end
+    end
+end
+
+Players.PlayerAdded:Connect(createESP)
+for _, p in pairs(Players:GetPlayers()) do createESP(p) end
+
+-----------------------------------------------------------
+-- FLY SYSTEMS (ROOT_FLY & CFLY)
+-----------------------------------------------------------
+local flying = false
+local flySpeed = 50
+local c_conn
+
+local function toggleFly()
+    flying = not flying
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    
+    if flying and hrp and hum then
+        playSound(SOUNDS.FlySound, 0.8, 1)
+        local bv = Instance.new("BodyVelocity", hrp)
+        bv.Name = "ZokaFlyVelocity"
+        bv.MaxForce = Vector3.new(1,1,1) * math.huge
+        bv.Velocity = Vector3.new(0,0,0)
+        
+        local bg = Instance.new("BodyGyro", hrp)
+        bg.Name = "ZokaFlyGyro"
+        bg.MaxTorque = Vector3.new(1,1,1) * math.huge
+        bg.P = 10000
+        bg.CFrame = hrp.CFrame
+        
+        hum.PlatformStand = true
+        
+        c_conn = RunService.RenderStepped:Connect(function()
+            local cam = workspace.CurrentCamera
+            local moveDir = Vector3.new(0,0,0)
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0,1,0) end
+            
+            bv.Velocity = moveDir.Unit * flySpeed
+            if moveDir.Magnitude == 0 then bv.Velocity = Vector3.new(0,0,0) end
+            bg.CFrame = cam.CFrame
+        end)
+    else
+        if c_conn then c_conn:Disconnect() end
+        if hrp then
+            if hrp:FindFirstChild("ZokaFlyVelocity") then hrp.ZokaFlyVelocity:Destroy() end
+            if hrp:FindFirstChild("ZokaFlyGyro") then hrp.ZokaFlyGyro:Destroy() end
+        end
+        if hum then hum.PlatformStand = false end
+    end
+end
+
+-- NEW: CFRAME FLY ENGINE
+local cflying = false
+local cflySpeed = 50
+local cf_conn
+
+local function toggleCFly()
+    cflying = not cflying
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+
+    if cflying and hrp and hum then
+        playSound(SOUNDS.FlySound, 0.8, 1.2)
+        hum.PlatformStand = true
+        cf_conn = RunService.RenderStepped:Connect(function(dt)
+            local cam = workspace.CurrentCamera
+            local moveDir = Vector3.new(0,0,0)
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0,1,0) end
+            
+            if moveDir.Magnitude > 0 then
+                hrp.CFrame = hrp.CFrame + (moveDir.Unit * cflySpeed * dt)
+            end
+            hrp.Velocity = Vector3.new(0,0,0)
+        end)
+    else
+        if cf_conn then cf_conn:Disconnect() end
+        if hum then hum.PlatformStand = false end
+    end
+end
+
+-----------------------------------------------------------
+-- HUB MAIN UI
+-----------------------------------------------------------
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 650, 0, 400)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.BackgroundColor3 = Color3.fromRGB(5, 5, 5)
+mainFrame.Visible = false
+mainFrame.Parent = screenGui
+applyHackerStyle(mainFrame, Color3.fromRGB(0, 255, 100), 0.2)
+makeDraggable(mainFrame)
+
+local sideBar = Instance.new("Frame", mainFrame)
+sideBar.Size = UDim2.new(0, 170, 1, 0)
+sideBar.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+applyHackerStyle(sideBar, Color3.fromRGB(0, 255, 100), 0.6)
+
+local osTitle = Instance.new("TextLabel", sideBar)
+osTitle.Size = UDim2.new(1, 0, 0, 70)
+osTitle.Text = "ZOKA_OS v1\n[SYSTEM HUB]"
+osTitle.TextColor3 = Color3.fromRGB(0, 255, 100)
+osTitle.Font = Enum.Font.Code
+osTitle.TextSize = 20
+osTitle.BackgroundTransparency = 1
+
+-----------------------------------------------------------
+-- PANELS
+-----------------------------------------------------------
+local contentArea = Instance.new("Frame", mainFrame)
+contentArea.Position = UDim2.new(0, 180, 0, 10)
+contentArea.Size = UDim2.new(1, -190, 1, -20)
+contentArea.BackgroundTransparency = 1
+
+local infoPanel = Instance.new("ScrollingFrame", contentArea)
+infoPanel.Size = UDim2.new(1, 0, 1, 0)
+infoPanel.BackgroundTransparency = 1
+infoPanel.Visible = true
+infoPanel.ScrollBarThickness = 2
+
+local utilityPanel = Instance.new("Frame", contentArea)
+utilityPanel.Size = UDim2.new(1, 0, 1, 0)
+utilityPanel.BackgroundTransparency = 1
+utilityPanel.Visible = false
+
+local espPanel = Instance.new("Frame", contentArea)
+espPanel.Size = UDim2.new(1, 0, 1, 0)
+espPanel.BackgroundTransparency = 1
+espPanel.Visible = false
+
+local flyPanel = Instance.new("Frame", contentArea)
+flyPanel.Size = UDim2.new(1, 0, 1, 0)
+flyPanel.BackgroundTransparency = 1
+flyPanel.Visible = false
+
+-----------------------------------------------------------
+-- USER INFO
+-----------------------------------------------------------
+local pfp = Instance.new("ImageLabel", infoPanel)
+pfp.Size = UDim2.new(0, 80, 0, 80)
+pfp.Position = UDim2.new(0, 5, 0, 10)
+pfp.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+pfp.Image = Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+applyHackerStyle(pfp, Color3.fromRGB(0, 255, 100), 0.5)
+
+local function createInfoLine(text, pos)
+    local l = Instance.new("TextLabel", infoPanel)
+    l.Size = UDim2.new(1, 0, 0, 25)
+    l.Position = pos
+    l.BackgroundTransparency = 1
+    l.TextColor3 = Color3.fromRGB(0, 255, 100)
+    l.Font = Enum.Font.Code
+    l.TextSize = 15
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Text = "> " .. text
+    return l
+end
+
+local gameName = pcall(function() return MarketplaceService:GetProductInfo(game.PlaceId).Name end) or "Unknown Game"
+
+createInfoLine("OPERATOR: " .. player.Name, UDim2.new(0, 95, 0, 15))
+createInfoLine("USER_ID: " .. player.UserId, UDim2.new(0, 95, 0, 45))
+createInfoLine("SYSTEM_TARGET: " .. tostring(gameName), UDim2.new(0, 5, 0, 110))
+createInfoLine("ACCOUNT_AGE: " .. player.AccountAge .. " DAYS", UDim2.new(0, 5, 0, 140))
+
+local playerCounter = createInfoLine("SERVER_PLAYERS: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers, UDim2.new(0, 5, 0, 170))
+local playtimeLabel = createInfoLine("SESSION_TIME: 00:00:00", UDim2.new(0, 5, 0, 200))
+createInfoLine("OS_STATUS: ENCRYPTED", UDim2.new(0, 5, 0, 230))
+
+task.spawn(function()
+    while task.wait(1) do
+        local seconds = os.time() - startTime
+        local h = math.floor(seconds / 3600)
+        local m = math.floor((seconds % 3600) / 60)
+        local s = seconds % 60
+        playtimeLabel.Text = string.format("> SESSION_TIME: %02d:%02d:%02d", h, m, s)
+        playerCounter.Text = "> SERVER_PLAYERS: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
+    end
+end)
+
+-----------------------------------------------------------
+-- UTILITY BUTTONS
+-----------------------------------------------------------
+local function createUtilityBtn(parent, text, pos)
+    local btn = Instance.new("TextButton", parent)
+    btn.Size = UDim2.new(0, 210, 0, 40)
+    btn.Position = pos
+    btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    btn.Text = "[ " .. text .. " ]"
+    btn.TextColor3 = Color3.fromRGB(0, 255, 100)
+    btn.Font = Enum.Font.Code
+    btn.TextSize = 13
+    applyHackerStyle(btn)
+    return btn
+end
+
+local function createUtilityInput(parent, placeholder, pos)
+    local box = Instance.new("TextBox", parent)
+    box.Size = UDim2.new(0, 210, 0, 40)
+    box.Position = pos
+    box.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    box.PlaceholderText = placeholder
+    box.Text = ""
+    box.TextColor3 = Color3.fromRGB(0, 255, 100)
+    box.PlaceholderColor3 = Color3.fromRGB(0, 100, 40)
+    box.Font = Enum.Font.Code
+    box.TextSize = 13
+    applyHackerStyle(box)
+    return box
+end
+
+local tpBtn = createUtilityBtn(utilityPanel, "EXECUTE TELEPORT_HUB", UDim2.new(0, 0, 0, 0))
+tpBtn.TextColor3 = Color3.fromRGB(255, 200, 0)
+tpBtn.MouseButton1Click:Connect(function()
+    playSound(SOUNDS.Toggle, 0.6)
+    fullScreenGlitch()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/ZokaOnTop/003/refs/heads/main/Zoka%20OS%20v1.0%20Teleport%20Hub.txt"))()
+end)
+
+local espBtn = createUtilityBtn(espPanel, "ENABLE SYSTEM_ESP", UDim2.new(0, 0, 0, 0))
+espBtn.MouseButton1Click:Connect(function()
+    toggleESP()
+    espBtn.Text = espEnabled and "[ DISABLE SYSTEM_ESP ]" or "[ ENABLE SYSTEM_ESP ]"
+    espBtn.TextColor3 = espEnabled and Color3.fromRGB(255, 0, 80) or Color3.fromRGB(0, 255, 100)
+end)
+
+-- MODIFS FLY PANEL (ROOT_FLY)
+local flyActBtn = createUtilityBtn(flyPanel, "ACTIVATE ROOT_FLY", UDim2.new(0, 0, 0, 0))
+flyActBtn.MouseButton1Click:Connect(function()
+    toggleFly()
+    playSound(SOUNDS.Toggle, 0.5)
+    fullScreenGlitch()
+    flyActBtn.Text = flying and "[ DEACTIVATE ROOT_FLY ]" or "[ ACTIVATE ROOT_FLY ]"
+    flyActBtn.TextColor3 = flying and Color3.fromRGB(255, 0, 80) or Color3.fromRGB(0, 255, 100)
+end)
+
+local isBindingFly = false
+local flyBindBtn = createUtilityBtn(flyPanel, "FLY BIND: " .. FLY_KEY.Name, UDim2.new(0, 220, 0, 0))
+flyBindBtn.MouseButton1Click:Connect(function()
+    isBindingFly = true
+    flyBindBtn.Text = "[ PRESS ANY KEY ]"
+    flyBindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+end)
+
+local speedInput = createUtilityInput(flyPanel, "ENTER SPEED (Def: 50)", UDim2.new(0, 0, 0, 50))
+speedInput.FocusLost:Connect(function()
+    local val = tonumber(speedInput.Text)
+    if val then flySpeed = val playSound(SOUNDS.Static, 0.3) else speedInput.Text = "" end
+end)
+
+-- SEPARATEUR VISUEL
+local sep = Instance.new("Frame", flyPanel)
+sep.Size = UDim2.new(1, 0, 0, 2)
+sep.Position = UDim2.new(0, 0, 0, 110)
+sep.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+sep.BorderSizePixel = 0
+
+-- MODIFS FLY PANEL (CFLY / INVISIBLE)
+local cflyActBtn = createUtilityBtn(flyPanel, "ACTIVATE CFLY (INVIS)", UDim2.new(0, 0, 0, 130))
+cflyActBtn.TextColor3 = Color3.fromRGB(0, 255, 255)
+cflyActBtn.MouseButton1Click:Connect(function()
+    toggleCFly()
+    playSound(SOUNDS.Toggle, 0.5)
+    fullScreenGlitch()
+    cflyActBtn.Text = cflying and "[ DEACTIVATE CFLY ]" or "[ ACTIVATE CFLY (INVIS) ]"
+    cflyActBtn.TextColor3 = cflying and Color3.fromRGB(255, 0, 80) or Color3.fromRGB(0, 255, 255)
+end)
+
+local isBindingCFly = false
+local cflyBindBtn = createUtilityBtn(flyPanel, "CFLY BIND: " .. CFLY_KEY.Name, UDim2.new(0, 220, 0, 130))
+cflyBindBtn.MouseButton1Click:Connect(function()
+    isBindingCFly = true
+    cflyBindBtn.Text = "[ PRESS ANY KEY ]"
+    cflyBindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+end)
+
+local cspeedInput = createUtilityInput(flyPanel, "ENTER CFLY SPEED", UDim2.new(0, 0, 0, 180))
+cspeedInput.FocusLost:Connect(function()
+    local val = tonumber(cspeedInput.Text)
+    if val then cflySpeed = val playSound(SOUNDS.Static, 0.3) else cspeedInput.Text = "" end
+end)
+
+-- ESP PANEL CONTROLS
+local isBindingESP = false
+local espBindBtn = createUtilityBtn(espPanel, "ESP BIND: " .. ESP_KEY.Name, UDim2.new(0, 220, 0, 0))
+espBindBtn.MouseButton1Click:Connect(function()
+    isBindingESP = true
+    espBindBtn.Text = "[ PRESS ANY KEY ]"
+    espBindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+end)
+
+local colorBtn = createUtilityBtn(espPanel, "CHANGE NAME_COLOR", UDim2.new(0, 0, 0, 50))
+colorBtn.MouseButton1Click:Connect(function()
+    colorIndex = (colorIndex % #colors) + 1
+    espColor = colors[colorIndex]
+    colorBtn.TextColor3 = espColor
+    playSound(SOUNDS.Static, 0.3)
+end)
+
+local distBtn = createUtilityBtn(espPanel, "SHOW DISTANCE: OFF", UDim2.new(0, 220, 0, 50))
+distBtn.MouseButton1Click:Connect(function()
+    showDistance = not showDistance
+    distBtn.Text = showDistance and "SHOW DISTANCE: ON" or "SHOW DISTANCE: OFF"
+    distBtn.TextColor3 = showDistance and Color3.fromRGB(0, 255, 255) or Color3.fromRGB(0, 255, 100)
+    playSound(SOUNDS.Toggle, 0.4)
+end)
+
+local healthBtn = createUtilityBtn(espPanel, "SHOW HEALTH: OFF", UDim2.new(0, 0, 0, 100))
+healthBtn.MouseButton1Click:Connect(function()
+    showHealth = not showHealth
+    healthBtn.Text = showHealth and "SHOW HEALTH: ON" or "SHOW HEALTH: OFF"
+    healthBtn.TextColor3 = showHealth and Color3.fromRGB(255, 100, 255) or Color3.fromRGB(0, 255, 100)
+    playSound(SOUNDS.Toggle, 0.4)
+end)
+
+local fontSizeBtn = createUtilityBtn(espPanel, "ESP SIZE: " .. espTextSize, UDim2.new(0, 220, 0, 100))
+fontSizeBtn.MouseButton1Click:Connect(function()
+    if espTextSize >= 20 then espTextSize = 8 else espTextSize = espTextSize + 2 end
+    fontSizeBtn.Text = "ESP SIZE: " .. espTextSize
+    playSound(SOUNDS.Static, 0.2)
+end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if isBindingESP and input.UserInputType == Enum.UserInputType.Keyboard then
+        ESP_KEY = input.KeyCode
+        espBindBtn.Text = "[ ESP BIND: " .. ESP_KEY.Name .. " ]"
+        espBindBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+        isBindingESP = false
+    elseif isBindingFly and input.UserInputType == Enum.UserInputType.Keyboard then
+        FLY_KEY = input.KeyCode
+        flyBindBtn.Text = "[ FLY BIND: " .. FLY_KEY.Name .. " ]"
+        flyBindBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+        isBindingFly = false
+    elseif isBindingCFly and input.UserInputType == Enum.UserInputType.Keyboard then
+        CFLY_KEY = input.KeyCode
+        cflyBindBtn.Text = "[ CFLY BIND: " .. CFLY_KEY.Name .. " ]"
+        cflyBindBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+        isBindingCFly = false
+    elseif not gpe and input.KeyCode == ALT_TOGGLE then
+        toggleUI()
+    elseif not gpe and input.KeyCode == ESP_KEY then
+        toggleESP()
+        espBtn.Text = espEnabled and "[ DISABLE SYSTEM_ESP ]" or "[ ENABLE SYSTEM_ESP ]"
+        espBtn.TextColor3 = espEnabled and Color3.fromRGB(255, 0, 80) or Color3.fromRGB(0, 255, 100)
+    elseif not gpe and input.KeyCode == FLY_KEY then
+        toggleFly()
+        flyActBtn.Text = flying and "[ DEACTIVATE ROOT_FLY ]" or "[ ACTIVATE ROOT_FLY ]"
+        flyActBtn.TextColor3 = flying and Color3.fromRGB(255, 0, 80) or Color3.fromRGB(0, 255, 100)
+    elseif not gpe and input.KeyCode == CFLY_KEY then
+        toggleCFly()
+        cflyActBtn.Text = cflying and "[ DEACTIVATE CFLY ]" or "[ ACTIVATE CFLY (INVIS) ]"
+        cflyActBtn.TextColor3 = cflying and Color3.fromRGB(255, 0, 80) or Color3.fromRGB(0, 255, 255)
+    end
+end)
+
+-----------------------------------------------------------
+-- NAVIGATION & UI LOGIC
+-----------------------------------------------------------
+local function createMenuBtn(text, pos, color)
+    local btn = Instance.new("TextButton", sideBar)
+    btn.Size = UDim2.new(1, -20, 0, 40)
+    btn.Position = pos
+    btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    btn.Text = "[ " .. text .. " ]"
+    btn.TextColor3 = color or Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.Code
+    btn.TextSize = 14
+    applyHackerStyle(btn, color or Color3.fromRGB(0, 255, 100))
+    return btn
+end
+
+local infoBtn = createMenuBtn("USER_INFO", UDim2.new(0, 10, 0, 90))
+local espTabBtn = createMenuBtn("ESP_EXE", UDim2.new(0, 10, 0, 140), Color3.fromRGB(0, 255, 255))
+local utilBtn = createMenuBtn("ALL_UTILITY", UDim2.new(0, 10, 0, 190), Color3.fromRGB(255, 200, 0))
+local flyTabBtn = createMenuBtn("ROOT_FLY", UDim2.new(0, 10, 0, 240), Color3.fromRGB(255, 0, 80))
+
+infoBtn.MouseButton1Click:Connect(function() playSound(SOUNDS.Static, 0.3) infoPanel.Visible = true utilityPanel.Visible = false espPanel.Visible = false flyPanel.Visible = false end)
+espTabBtn.MouseButton1Click:Connect(function() playSound(SOUNDS.Static, 0.3) infoPanel.Visible = false utilityPanel.Visible = false espPanel.Visible = true flyPanel.Visible = false end)
+utilBtn.MouseButton1Click:Connect(function() playSound(SOUNDS.Static, 0.3) infoPanel.Visible = false utilityPanel.Visible = true espPanel.Visible = false flyPanel.Visible = false end)
+flyTabBtn.MouseButton1Click:Connect(function() playSound(SOUNDS.Static, 0.3) infoPanel.Visible = false utilityPanel.Visible = false espPanel.Visible = false flyPanel.Visible = true end)
+
+local isOpen = false
+function toggleUI()
+    if not isOpen then
+        isOpen = true 
+        playSound(SOUNDS.Toggle, 0.7)
+        local targetPos = mainFrame.Position
+        local absolutePos = mainFrame.AbsolutePosition
+        local absoluteSize = mainFrame.AbsoluteSize
+        for i = 1, 30 do
+            task.spawn(function()
+                local pixel = Instance.new("Frame", screenGui)
+                pixel.BorderSizePixel = 0
+                pixel.BackgroundColor3 = (math.random() > 0.5 and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 255, 255))
+                pixel.Size = UDim2.new(0, 0, 0, 0)
+                pixel.ZIndex = 10001
+                local startX = absolutePos.X + (absoluteSize.X / 2) + math.random(-300, 300)
+                local startY = absolutePos.Y + (absoluteSize.Y / 2) + math.random(-300, 300)
+                pixel.Position = UDim2.new(0, startX, 0, startY)
+                pixel.BackgroundTransparency = 1
+                local destX = absolutePos.X + math.random(0, absoluteSize.X)
+                local destY = absolutePos.Y + math.random(0, absoluteSize.Y)
+                local tween = TweenService:Create(pixel, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(0, destX, 0, destY),
+                    Size = UDim2.new(0, math.random(5, 25), 0, math.random(5, 25)),
+                    BackgroundTransparency = 0.2,
+                    Rotation = math.random(-180, 180)
+                })
+                tween:Play()
+                fullScreenGlitch()
+                tween.Completed:Connect(function() task.wait(0.05) pixel:Destroy() end)
+            end)
+            if i % 6 == 0 then task.wait() end
+        end
+        task.wait(0.2)
+        mainFrame.Visible = true 
+        for i = 1, 8 do 
+            fullScreenGlitch() 
+            mainFrame.Position = UDim2.new(targetPos.X.Scale, targetPos.X.Offset + math.random(-5,5), targetPos.Y.Scale, targetPos.Y.Offset + math.random(-5,5)) 
+            task.wait(0.01) 
+        end
+        mainFrame.Position = targetPos
+    else
+        isOpen = false 
+        playSound(SOUNDS.Static, 0.8)
+        local absolutePos = mainFrame.AbsolutePosition
+        local absoluteSize = mainFrame.AbsoluteSize
+        mainFrame.Visible = false
+        for i = 1, 25 do
+            task.spawn(function()
+                local pixel = Instance.new("Frame", screenGui)
+                pixel.BorderSizePixel = 0
+                pixel.BackgroundColor3 = (math.random() > 0.5 and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(20, 20, 20))
+                pixel.Size = UDim2.new(0, math.random(10, 40), 0, math.random(10, 40))
+                pixel.Position = UDim2.new(0, absolutePos.X + math.random(0, absoluteSize.X), 0, absolutePos.Y + math.random(0, absoluteSize.Y))
+                pixel.ZIndex = 10001
+                local drift = math.random(-100, 100)
+                local fall = math.random(200, 400)
+                local tween = TweenService:Create(pixel, TweenInfo.new(0.6, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                    Position = pixel.Position + UDim2.new(0, drift, 0, fall),
+                    Rotation = math.random(-180, 180),
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(0, 0, 0, 0)
+                })
+                tween:Play()
+                fullScreenGlitch()
+                tween.Completed:Connect(function() pixel:Destroy() end)
+            end)
+            if i % 5 == 0 then task.wait() end
+        end
+    end
+end
+
+-----------------------------------------------------------
+-- INTRO ENGINE
+-----------------------------------------------------------
+local function createGlitchOverlay()
+    local gl = Instance.new("Frame", screenGui)
+    gl.BackgroundColor3 = (math.random() > 0.5 and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 0, 80))
+    gl.BackgroundTransparency = 0.6
+    gl.Size = UDim2.new(1, 0, 0, math.random(5, 20))
+    gl.Position = UDim2.new(0, 0, math.random(), 0)
+    gl.ZIndex = 5000
+    task.delay(0.05, function() gl:Destroy() end)
+end
+
+function startIntro()
+    local introFrame = Instance.new("Frame", screenGui)
+    introFrame.Size = UDim2.new(1, 0, 1, 0)
+    introFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    introFrame.ZIndex = 2000
+    local logTxt = Instance.new("TextLabel", introFrame)
+    logTxt.Size = UDim2.new(0.5, 0, 0.4, 0)
+    logTxt.Position = UDim2.new(0.02, 0, 0.02, 0)
+    logTxt.BackgroundTransparency = 1
+    logTxt.TextColor3 = Color3.fromRGB(0, 255, 100)
+    logTxt.Font = Enum.Font.Code
+    logTxt.TextSize = 18
+    logTxt.TextXAlignment = Enum.TextXAlignment.Left
+    logTxt.ZIndex = 2100
+    logTxt.Text = ""
+    local art = Instance.new("TextLabel", introFrame)
+    art.Size = UDim2.new(1, 0, 0.4, 0)
+    art.Position = UDim2.new(0.5, 0, 0.45, 0)
+    art.AnchorPoint = Vector2.new(0.5, 0.5)
+    art.BackgroundTransparency = 1
+    art.TextColor3 = Color3.fromRGB(0, 255, 100)
+    art.Font = Enum.Font.Code
+    art.TextSize = 24
+    art.ZIndex = 2050
+    art.Text = [[
+███████╗ ██████╗ ██╗  ██╗ █████╗ 
+╚══███╔╝██╔═══██╗██║ ██╔╝██╔══██╗
+  ███╔╝ ██║   ██║█████╔╝ ███████║
+ ███╔╝  ██║   ██║██╔═██╗ ██╔══██╗
+███████╗╚██████╔╝██║  ██╗██║  ██║
+╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝]]
+    local quote = Instance.new("TextLabel", introFrame)
+    quote.Size = UDim2.new(1, 0, 0, 50)
+    quote.Position = UDim2.new(0, 0, 0.8, 0)
+    quote.BackgroundTransparency = 1
+    quote.TextColor3 = Color3.fromRGB(255, 255, 255)
+    quote.Font = Enum.Font.Code
+    quote.TextSize = 22
+    quote.ZIndex = 2100
+    quote.Text = ""
+    pcall(function() playSound(SOUNDS.IntroAmbience, 1) end)
+    local lines = {">> ACCESSING_ZOKA_SYSTEM...", ">> DECRYPTING_BIOMETRICS...", ">> CONNECTION_STABLE", ">> WELCOME_OPERATOR"}
+    local logC = ""
+    for _, l in ipairs(lines) do
+        logC = logC .. l .. "\n"
+        logTxt.Text = logC
+        pcall(function() playSound(SOUNDS.Static, 0.2) end)
+        createGlitchOverlay()
+        task.wait(0.5)
+    end
+    local qTxt = "NOTHING IS IMPOSSIBLE IF U BELIEVE IT'S POSSIBLE"
+    for i = 1, #qTxt do
+        quote.Text = qTxt:sub(1, i)
+        if math.random() > 0.8 then createGlitchOverlay() end
+        task.wait(0.04)
+    end
+    task.wait(1.5)
+    TweenService:Create(introFrame, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
+    for _, v in pairs(introFrame:GetChildren()) do if v:IsA("TextLabel") then TweenService:Create(v, TweenInfo.new(0.5), {TextTransparency = 1}):Play() end end
+    task.wait(0.8)
+    introFrame:Destroy()
+    toggleUI()
+end
+
+task.spawn(startIntro)
