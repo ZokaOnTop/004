@@ -92,20 +92,6 @@ local function fullScreenGlitch()
     task.delay(0.04, function() line:Destroy() end)
 end
 
--- Fonction pour ajouter les textes de précision (Correction Position)
-local function createSectionLabel(parent, text, pos)
-    local lbl = Instance.new("TextLabel", parent)
-    lbl.Size = UDim2.new(1, 0, 0, 20)
-    lbl.Position = pos
-    lbl.BackgroundTransparency = 1
-    lbl.TextColor3 = Color3.fromRGB(60, 60, 60) -- Gris foncé
-    lbl.Font = Enum.Font.Code
-    lbl.TextSize = 12
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Text = text:upper()
-    return lbl
-end
-
 -----------------------------------------------------------
 -- ESP SYSTEM ENGINE
 -----------------------------------------------------------
@@ -220,11 +206,13 @@ Players.PlayerAdded:Connect(createESP)
 for _, p in pairs(Players:GetPlayers()) do createESP(p) end
 
 -----------------------------------------------------------
--- FLY SYSTEM (ROOT_FLY)
+-- FLY SYSTEM (ROOT_FLY & CFRAME_FLY)
 -----------------------------------------------------------
 local flying = false
+local cflying = false
 local flySpeed = 50
 local c_conn
+local cf_conn
 
 local function toggleFly()
     flying = not flying
@@ -269,6 +257,32 @@ local function toggleFly()
             if hrp:FindFirstChild("ZokaFlyGyro") then hrp.ZokaFlyGyro:Destroy() end
         end
         if hum then hum.PlatformStand = false end
+    end
+end
+
+-- CFRAME FLY ADDITION
+local function toggleCFrameFly()
+    cflying = not cflying
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if cflying and hrp then
+        playSound(SOUNDS.FlySound, 0.8, 1.2)
+        cf_conn = RunService.Heartbeat:Connect(function(dt)
+            local cam = workspace.CurrentCamera
+            local moveDir = Vector3.new(0,0,0)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0,1,0) end
+            if moveDir.Magnitude > 0 then
+                hrp.CFrame = hrp.CFrame + (moveDir.Unit * flySpeed * dt)
+            end
+            hrp.Velocity = Vector3.new(0,0,0)
+        end)
+    else
+        if cf_conn then cf_conn:Disconnect() end
     end
 end
 
@@ -331,8 +345,6 @@ flyPanel.Visible = false
 -----------------------------------------------------------
 -- USER INFO
 -----------------------------------------------------------
-createSectionLabel(infoPanel, "Operator Statistics", UDim2.new(0, 5, 0, 0))
-
 local pfp = Instance.new("ImageLabel", infoPanel)
 pfp.Size = UDim2.new(0, 80, 0, 80)
 pfp.Position = UDim2.new(0, 5, 0, 25)
@@ -407,8 +419,6 @@ local function createUtilityInput(parent, placeholder, pos)
     return box
 end
 
--- TEXTE GRIS UTILITY
-createSectionLabel(utilityPanel, "Utility / Scripts Hub", UDim2.new(0, 0, 0, -5))
 local tpBtn = createUtilityBtn(utilityPanel, "EXECUTE TELEPORT_HUB", UDim2.new(0, 0, 0, 20))
 tpBtn.TextColor3 = Color3.fromRGB(255, 200, 0)
 tpBtn.MouseButton1Click:Connect(function()
@@ -417,8 +427,6 @@ tpBtn.MouseButton1Click:Connect(function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/ZokaOnTop/003/refs/heads/main/Zoka%20OS%20v1.0%20Teleport%20Hub.txt"))()
 end)
 
--- TEXTE GRIS ESP
-createSectionLabel(espPanel, "Esp/Wallhack System", UDim2.new(0, 0, 0, -5))
 local espBtn = createUtilityBtn(espPanel, "ENABLE SYSTEM_ESP", UDim2.new(0, 0, 0, 20))
 espBtn.MouseButton1Click:Connect(function()
     toggleESP()
@@ -426,8 +434,6 @@ espBtn.MouseButton1Click:Connect(function()
     espBtn.TextColor3 = espEnabled and Color3.fromRGB(255, 0, 80) or Color3.fromRGB(0, 255, 100)
 end)
 
--- TEXTE GRIS FLY
-createSectionLabel(flyPanel, "Fly System / CFrame Fly", UDim2.new(0, 0, 0, -5))
 local flyActBtn = createUtilityBtn(flyPanel, "ACTIVATE ROOT_FLY", UDim2.new(0, 0, 0, 20))
 flyActBtn.MouseButton1Click:Connect(function()
     toggleFly()
@@ -435,6 +441,17 @@ flyActBtn.MouseButton1Click:Connect(function()
     fullScreenGlitch()
     flyActBtn.Text = flying and "[ DEACTIVATE ROOT_FLY ]" or "[ ACTIVATE ROOT_FLY ]"
     flyActBtn.TextColor3 = flying and Color3.fromRGB(255, 0, 80) or Color3.fromRGB(0, 255, 100)
+end)
+
+-- CFRAME FLY BUTTON
+local cfFlyBtn = createUtilityBtn(flyPanel, "ACTIVATE CFRAME_FLY", UDim2.new(0, 0, 0, 120))
+cfFlyBtn.TextColor3 = Color3.fromRGB(0, 255, 255)
+cfFlyBtn.MouseButton1Click:Connect(function()
+    toggleCFrameFly()
+    playSound(SOUNDS.Toggle, 0.5)
+    fullScreenGlitch()
+    cfFlyBtn.Text = cflying and "[ DEACTIVATE CFRAME_FLY ]" or "[ ACTIVATE CFRAME_FLY ]"
+    cfFlyBtn.TextColor3 = cflying and Color3.fromRGB(255, 0, 80) or Color3.fromRGB(0, 255, 255)
 end)
 
 local isBindingFly = false
@@ -659,7 +676,7 @@ function startIntro()
 ╚══███╔╝██╔═══██╗██║ ██╔╝██╔══██╗
   ███╔╝ ██║   ██║█████╔╝ ███████║
  ███╔╝  ██║   ██║██╔═██╗ ██╔══██╗
-███████╗╚██████╔╝██║  ██╗██║  ██║
+███████╗╚██████╔╝██║  ██╗██║  ██╗
 ╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝]]
     local quote = Instance.new("TextLabel", introFrame)
     quote.Size = UDim2.new(1, 0, 0, 50)
