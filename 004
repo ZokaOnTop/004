@@ -1,7 +1,7 @@
 --[[ 
     ZOKA HUB - MULTI-TOOL OS (v2.3 ULTRA-SIGHT)
     Theme: WatchDogs2 x Matrix x Glitch
-    Features: ESP System (Highlight Corp/Head), Auto-Player Refresh, Teleport Hub, ROOT_FLY
+    Features: ESP System (Highlight Corp/Head), Auto-Player Refresh, Teleport Hub, ROOT_FLY, AIMBOT_HUB
 ]]
 
 local Players = game:GetService("Players")
@@ -93,7 +93,7 @@ local function fullScreenGlitch()
 end
 
 -----------------------------------------------------------
--- ESP SYSTEM ENGINE
+-- OPTIMIZED ESP SYSTEM ENGINE
 -----------------------------------------------------------
 local espEnabled = false
 local showDistance = false
@@ -103,11 +103,11 @@ local espColor = Color3.fromRGB(255, 255, 255)
 local espTextSize = 10 
 local colorIndex = 1
 local colors = {
-    Color3.fromRGB(0, 255, 100), -- Vert
-    Color3.fromRGB(255, 0, 80),  -- Rouge
-    Color3.fromRGB(0, 150, 255), -- Bleu
-    Color3.fromRGB(255, 200, 0), -- Jaune
-    Color3.fromRGB(255, 255, 255) -- Blanc
+    Color3.fromRGB(0, 255, 100),
+    Color3.fromRGB(255, 0, 80),
+    Color3.fromRGB(0, 150, 255),
+    Color3.fromRGB(255, 200, 0),
+    Color3.fromRGB(255, 255, 255)
 }
 
 local function createESP(targetPlayer)
@@ -115,82 +115,16 @@ local function createESP(targetPlayer)
     local folder = Instance.new("Folder", screenGui)
     folder.Name = "ESP_" .. targetPlayer.Name
     
-    local function updateESP()
-        local char = targetPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and espEnabled then
-            local hrp = char.HumanoidRootPart
-            local hum = char.Humanoid
-            local head = char:FindFirstChild("Head")
-            local cam = workspace.CurrentCamera
-            local pos, onScreen = cam:WorldToViewportPoint(hrp.Position)
-            
-            local bodyHighlight = char:FindFirstChild("ZokaBodyHighlight") or Instance.new("Highlight")
-            bodyHighlight.Name = "ZokaBodyHighlight"
-            bodyHighlight.Parent = char
-            bodyHighlight.FillColor = Color3.fromRGB(0, 255, 100)
-            bodyHighlight.Enabled = true
-            
-            if head then
-                local headHighlight = head:FindFirstChild("ZokaHeadHighlight") or Instance.new("Highlight")
-                headHighlight.Name = "ZokaHeadHighlight"
-                headHighlight.Parent = head
-                headHighlight.Adornee = head
-                headHighlight.FillColor = Color3.fromRGB(255, 0, 0)
-                headHighlight.Enabled = true
-                
-                for _, acc in pairs(char:GetChildren()) do
-                    if acc:IsA("Accessory") and acc:FindFirstChild("Handle") then
-                        local accHighlight = acc.Handle:FindFirstChild("ZokaHairHighlight") or Instance.new("Highlight")
-                        accHighlight.Name = "ZokaHairHighlight"
-                        accHighlight.Parent = acc.Handle
-                        accHighlight.Adornee = acc.Handle
-                        accHighlight.FillColor = Color3.fromRGB(255, 0, 0)
-                        accHighlight.Enabled = true
-                    end
-                end
-            end
-
-            local nameLabel = folder:FindFirstChild("Name") or Instance.new("TextLabel", folder)
-            if onScreen then
-                nameLabel.Name = "Name"
-                nameLabel.Visible = true
-                nameLabel.Position = UDim2.new(0, pos.X, 0, pos.Y - 60)
-                nameLabel.Size = UDim2.new(0, 200, 0, 40)
-                nameLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-                nameLabel.BackgroundTransparency = 1
-                
-                local displayText = targetPlayer.Name
-                if showHealth then
-                    displayText = displayText .. "\nHP: " .. math.floor(hum.Health)
-                end
-                if showDistance then
-                    local dist = math.floor((player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
-                    displayText = displayText .. "\n[" .. dist .. "m]"
-                end
-                
-                nameLabel.Text = displayText
-                nameLabel.TextColor3 = espColor
-                nameLabel.Font = Enum.Font.RobotoMono
-                nameLabel.TextSize = espTextSize
-                if not nameLabel:FindFirstChild("Outline") then
-                    Instance.new("UIStroke", nameLabel).Thickness = 2
-                end
-            else
-                nameLabel.Visible = false
-            end
-        else
-            folder:ClearAllChildren()
-            if targetPlayer.Character then
-                if targetPlayer.Character:FindFirstChild("ZokaBodyHighlight") then targetPlayer.Character.ZokaBodyHighlight.Enabled = false end
-                if targetPlayer.Character:FindFirstChild("Head") and targetPlayer.Character.Head:FindFirstChild("ZokaHeadHighlight") then targetPlayer.Character.Head.ZokaHeadHighlight.Enabled = false end
-                for _, v in pairs(targetPlayer.Character:GetDescendants()) do
-                    if v.Name == "ZokaHairHighlight" then v.Enabled = false end
-                end
-            end
-        end
-    end
-    local conn = RunService.RenderStepped:Connect(updateESP)
-    espObjects[targetPlayer] = {Folder = folder, Conn = conn}
+    local label = Instance.new("TextLabel", folder)
+    label.Name = "Name"
+    label.Visible = false
+    label.BackgroundTransparency = 1
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.Font = Enum.Font.RobotoMono
+    local stroke = Instance.new("UIStroke", label)
+    stroke.Thickness = 2
+    
+    espObjects[targetPlayer] = {Folder = folder, Label = label}
 end
 
 local function toggleESP()
@@ -198,9 +132,59 @@ local function toggleESP()
     playSound(SOUNDS.Static, 0.4)
     fullScreenGlitch()
     if not espEnabled then
-        for p, data in pairs(espObjects) do data.Folder:ClearAllChildren() end
+        for _, data in pairs(espObjects) do 
+            data.Label.Visible = false 
+            local char = _.Character
+            if char then
+                if char:FindFirstChild("ZokaBodyHighlight") then char.ZokaBodyHighlight.Enabled = false end
+                local head = char:FindFirstChild("Head")
+                if head and head:FindFirstChild("ZokaHeadHighlight") then head.ZokaHeadHighlight.Enabled = false end
+            end
+        end
     end
 end
+
+RunService.RenderStepped:Connect(function()
+    if not espEnabled then return end
+    local cam = workspace.CurrentCamera
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+    for targetPlayer, data in pairs(espObjects) do
+        local char = targetPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChild("Humanoid")
+        
+        if hrp and hum and hum.Health > 0 then
+            local pos, onScreen = cam:WorldToViewportPoint(hrp.Position)
+            if onScreen then
+                -- Highlights
+                local bodyH = char:FindFirstChild("ZokaBodyHighlight") or Instance.new("Highlight", char)
+                bodyH.Name = "ZokaBodyHighlight"
+                bodyH.FillColor = Color3.fromRGB(0, 255, 100)
+                bodyH.Enabled = true
+                
+                -- Text Logic
+                local displayText = targetPlayer.Name
+                if showHealth then displayText = displayText .. "\nHP: " .. math.floor(hum.Health) end
+                if showDistance and myRoot then
+                    local dist = math.floor((myRoot.Position - hrp.Position).Magnitude)
+                    displayText = displayText .. "\n[" .. dist .. "m]"
+                end
+                
+                data.Label.Text = displayText
+                data.Label.TextColor3 = espColor
+                data.Label.TextSize = espTextSize
+                data.Label.Position = UDim2.new(0, pos.X, 0, pos.Y - 60)
+                data.Label.Visible = true
+            else
+                data.Label.Visible = false
+            end
+        else
+            data.Label.Visible = false
+        end
+    end
+end)
 
 Players.PlayerAdded:Connect(createESP)
 for _, p in pairs(Players:GetPlayers()) do createESP(p) end
@@ -425,6 +409,15 @@ tpBtn.MouseButton1Click:Connect(function()
     playSound(SOUNDS.Toggle, 0.6)
     fullScreenGlitch()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/ZokaOnTop/003/refs/heads/main/Zoka%20OS%20v1.0%20Teleport%20Hub.txt"))()
+end)
+
+-- NOVEAU BOUTON AIMBOT (DEMANDÉ)
+local aimbotBtn = createUtilityBtn(utilityPanel, "EXECUTE AIMBOT_HUB", UDim2.new(0, 0, 0, 70))
+aimbotBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+aimbotBtn.MouseButton1Click:Connect(function()
+    playSound(SOUNDS.Toggle, 0.6)
+    fullScreenGlitch()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/ZokaOnTop/005/refs/heads/main/005"))()
 end)
 
 local espBtn = createUtilityBtn(espPanel, "ENABLE SYSTEM_ESP", UDim2.new(0, 0, 0, 20))
